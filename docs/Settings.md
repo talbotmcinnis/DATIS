@@ -18,7 +18,10 @@
     "region": "eu-central-1"
   },
   "srs_port": 5002,
-  "debug": false
+  "debug": false,
+  "default_loop_delay_sec": 3,
+  "carrier_loop_delay_sec": 10,
+  "custom_loop_delay_sec": 1
 }
 ```
 
@@ -74,6 +77,34 @@ Whether debug logging is enabled or not (default: `false`)
 
 </td>
 </tr>
+
+<tr>
+<td valign="top">`default_loop_delay_sec`</td>
+<td valign="top">
+
+The delay between announcements for Airfield and Weather stations (default: 3)
+
+</td>
+</tr>
+
+<tr>
+<td valign="top">`carrier_loop_delay_sec`</td>
+<td valign="top">
+
+The delay between announcements for Carriers (default: 10)
+
+</td>
+</tr>
+
+<tr>
+<td valign="top">`custom_loop_delay_sec`</td>
+<td valign="top">
+
+The delay between announcements for Custom stations (default: 1)
+
+</td>
+</tr>
+
 <tr>
 <td valign="top">`default_voice`</td>
 <td valign="top">

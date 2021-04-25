@@ -71,7 +71,7 @@ impl Datis {
         self.started = true;
 
         for station in &mut self.stations {
-            let config = match station.tts {
+            let tts_config = match station.tts {
                 TextToSpeechProvider::GoogleCloud { voice } => {
                     if let Some(ref config) = self.config.gcloud {
                         TextToSpeechConfig::GoogleCloud(GoogleCloudConfig {
@@ -130,8 +130,8 @@ impl Datis {
             self.runtime.spawn(
                 spawn(
                     station.clone(),
-                    self.config.srs_port,
-                    config,
+                    self.config.clone(),
+                    tts_config,
                     self.exporter.clone(),
                     rx,
                 )
@@ -174,18 +174,18 @@ pub enum Error {
 
 async fn spawn(
     station: Station,
-    port: u16,
+    config: Config,
     tts_config: TextToSpeechConfig,
     exporter: Option<ReportExporter>,
     shutdown_signal: oneshot::Receiver<()>,
 ) {
     let name = format!("ATIS {}", station.name);
-    log::debug!("Connecting {} to 127.0.0.1:{}", name, port);
+    log::debug!("Connecting {} to 127.0.0.1:{}", name, config.srs_port);
 
     let mut shutdown_signal = shutdown_signal.fuse();
     loop {
         let (tx, rx) = oneshot::channel();
-        let mut r = Box::pin(run(&station, port, &tts_config, exporter.as_ref(), rx)).fuse();
+        let mut r = Box::pin(run(&station, &config, &tts_config, exporter.as_ref(), rx)).fuse();
 
         select! {
             result = r => {
@@ -209,7 +209,7 @@ async fn spawn(
 
 async fn run(
     station: &Station,
-    port: u16,
+    config: &Config,
     tts_config: &TextToSpeechConfig,
     exporter: Option<&ReportExporter>,
     shutdown_signal: oneshot::Receiver<()>,
@@ -247,12 +247,12 @@ async fn run(
 
     let (tx, rx) = oneshot::channel();
 
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), config.srs_port);
     let (sink, stream) = client.start(addr, None, rx).await?.split();
 
     let mut stream = stream.fuse();
     let mut shutdown_signal = shutdown_signal.fuse();
-    let mut broadcast = Box::pin(audio_broadcast(sink, station, pos, tts_config, exporter)).fuse();
+    let mut broadcast = Box::pin(audio_broadcast(sink, station, pos, config, tts_config, exporter)).fuse();
 
     loop {
         select! {
@@ -285,6 +285,7 @@ async fn audio_broadcast(
     mut sink: SplitSink<VoiceStream, Vec<u8>>,
     station: &Station,
     position: Arc<RwLock<LatLngPosition>>,
+    config: &Config,
     tts_config: &TextToSpeechConfig,
     exporter: Option<&ReportExporter>,
 ) -> Result<(), anyhow::Error> {
@@ -372,16 +373,16 @@ async fn audio_broadcast(
             // postpone the next playback of the report by some seconds ...
             match &station.transmitter {
                 Transmitter::Airfield(_) | Transmitter::Weather(_) => {
-                    sleep(Duration::from_secs(3)).await;
+                    sleep(Duration::from_secs(config.default_loop_delay_sec.into())).await;
                 }
                 Transmitter::Carrier(_) => {
-                    sleep(Duration::from_secs(10)).await;
+                    sleep(Duration::from_secs(config.carrier_loop_delay_sec.into())).await;
                     // always create a new report for carriers, since they are usually
                     // constantly moving
                     break;
                 }
                 Transmitter::Custom(_) => {
-                    sleep(Duration::from_secs(1)).await;
+                    sleep(Duration::from_secs(config.custom_loop_delay_sec.into())).await;
                     // always create a new report to get an update on the position of the
                     // broadcasting unit
                     break;
